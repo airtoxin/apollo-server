@@ -2,6 +2,7 @@ import { createConnection } from 'net';
 import request from 'supertest';
 import { createApolloFetch } from 'apollo-server-integration-testsuite';
 import resolvable from '@josephg/resolvable';
+import responseCachePlugin from '../../../apollo-server-plugin-response-cache';
 
 import { gql, ApolloServer } from '../index';
 
@@ -268,6 +269,42 @@ describe('apollo-server', () => {
       await request(httpServer)
         .get('/.well-known/apollo/server-health')
         .expect(200, { status: 'pass' });
+    });
+
+    it.only('returns modded result', async () => {
+      const plugin = responseCachePlugin();
+
+      const server = new ApolloServer({
+        typeDefs,
+        resolvers,
+        plugins: [plugin],
+      });
+      const result = await server.executeOperation({
+        query: '{hello}',
+      });
+      expect(result.data).toEqual({ hello: 'hi' });
+
+      const modTypeDefs = gql`
+        type Query {
+          hello: Int
+          hang: Int
+        }
+      `;
+      const modResolvers = {
+        Query: {
+          hello: () => 100,
+        },
+      };
+
+      const modServer = new ApolloServer({
+        typeDefs: modTypeDefs,
+        resolvers: modResolvers,
+        plugins: [plugin],
+      });
+      const result1 = await modServer.executeOperation({
+        query: '{hello}',
+      });
+      expect(result1.data).not.toEqual({ hello: 'hi' });
     });
   });
 });
